@@ -3,3 +3,14 @@ __pycache__/
 *.pyc
 .env
 .venv/
+
+# Bot de WhatsApp (v2.0): datos locales y secretos
+ufinet_config.json
+ufinet_state.json
+ufinet_state.json.tmp
+ufinet_state.json.bak
+.wwebjs_auth/
+.wwebjs_cache/
+logs/
+node_modules/
+tools/

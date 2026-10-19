@@ -1,0 +1,15 @@
+{
+  "name": "ufinet-orion-whatsapp-bot",
+  "version": "2.0.0",
+  "description": "Alertas de SolarWinds Orion hacia WhatsApp para Ufinet Nicaragua",
+  "main": "ufinet_orion_whatsapp.js",
+  "private": true,
+  "scripts": {
+    "start": "node ufinet_orion_whatsapp.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "StinkyPinky",
+  "license": "UNLICENSED"
+}
