@@ -6,6 +6,7 @@ Sistema automatizado de integración y notificación de alertas para **SolarWind
 
 ## Características principales
 
+* **Modo enlaces (un cliente):** si se indica un CSV con switch y puerto de cada servicio, el bot vigila **solo esas interfaces** (ver [Modo enlaces](#modo-enlaces-monitorear-solo-los-servicios-de-un-cliente)). Sin CSV, vigila todo Orion como antes.
 * **Monitoreo de nodos y aplicaciones:** consulta en paralelo los nodos caídos (`Status = 2`) o inalcanzables (`Status = 12`) y las aplicaciones SAM/APM caídas (`Status = 2`).
 * **Alertas inmediatas (por defecto) o con retraso opcional:** por defecto la caída se notifica en el primer sondeo que la detecta (`confirmDownCycles: 1`) y la recuperación igual (`confirmUpCycles: 1`). Si hay equipos que "parpadean", puede elegir el modo con retraso (2 sondeos seguidos, ~1-2 min) durante la configuración inicial o cambiando esas dos claves. Cada evento se avisa una sola vez: caída y, luego, recuperación (con el nombre del equipo y la duración de la caída).
 * **Resumen en caídas masivas:** si en un mismo sondeo cambian más de `groupThreshold` entidades (por defecto 5), se envía **un solo mensaje resumen** en lugar de decenas de mensajes, y se respeta una pausa entre envíos.
@@ -116,8 +117,72 @@ Estas claves se escriben con su valor por defecto al crear el archivo. Si falta 
 | `allowSelfSigned` | `true` | Acepta certificados autofirmados (sin validar). |
 | `caCertPath` | `""` | Ruta a un `.pem`/`.crt` del CA de Orion: **recomendado**; valida el certificado de verdad. |
 | `timezone` | `America/Managua` | Zona horaria de las horas mostradas en los mensajes. |
+| `watchlistFile` | `""` | Ruta del CSV de enlaces a monitorear. Vacío = monitorear todo Orion. |
+| `clientName` | `""` | Nombre del cliente que aparece en los mensajes. |
+| `alertStatuses` | `[2, 8, 10, 12, 14]` | Estados de Orion que se consideran caída en modo enlaces. El significado exacto en su versión se imprime con `--verificar`. |
+| `matchOrder` | `["puerto", "codigo", "alias"]` | Orden de las estrategias para ubicar cada enlace en Orion. |
+| `portSuffixMatch` | `false` | Acepta una interfaz que solo coincide por el número final del puerto (`ge-0/0/30` para `port30`). Actívelo solo después de revisar `--verificar`. |
+| `resolveIntervalMinutes` | `360` | Cada cuánto se vuelve a ubicar la lista en Orion (detecta interfaces renombradas o agregadas). |
 
 La contraseña también puede proveerse con la variable de entorno `ORION_PASSWORD` (tiene prioridad sobre el archivo).
+
+---
+
+## Modo enlaces: monitorear solo los servicios de un cliente
+
+### Qué hace
+
+En vez de alertar por todo lo que cae en Orion, el bot lee un CSV con los servicios del cliente, ubica la **interfaz** de cada uno en Orion y consulta solo esas interfaces. Varios servicios pueden compartir un puerto: se vigila una sola vez y el mensaje lista todos los servicios afectados con sus códigos.
+
+### El CSV
+
+Columnas (los nombres se reconocen sin importar mayúsculas ni acentos; el separador `,` o `;` se detecta solo):
+
+| Columna | Obligatoria | Ejemplo |
+|---|---|---|
+| `Switch` | Sí | `NIRIRIVRIVSWAUFN01` |
+| `Puerto` | Sí | `port30` (si es una **IP**, se vigila el nodo completo) |
+| `Código administrativo` | Recomendada | `NINIALL10044691I` |
+| `Nombre del servicio` | Recomendada | `Internet DIA 5Mbps-ATM Gildan Rivas` |
+
+Hay un ejemplo en `enlaces_ejemplo.csv`. **No suba el CSV real al repositorio**: contiene datos del cliente y `.gitignore` ya lo excluye (`enlaces_*.csv`).
+
+### Cómo se ubica cada enlace
+
+Se prueban hasta tres estrategias, en el orden de `matchOrder`, y se usa la primera que da **exactamente un** resultado:
+
+1. **`puerto`**: nodo cuyo nombre es el switch + interfaz cuyo nombre es el puerto.
+2. **`codigo`**: interfaz cuya descripción contiene el código del servicio (por ejemplo `NINIALL10044691I`).
+3. **`alias`**: interfaz de cualquier equipo cuya descripción nombra al switch y `portN` (por ejemplo `NIMNMANLVRSWAUFN01_10.242.2.49_port43`).
+
+El bot **no adivina**: si una estrategia da varios resultados, o ninguna da nada, ese enlace no se monitorea y queda en el reporte. Si otra estrategia apunta a una interfaz distinta de la elegida, también se informa para que usted decida cuál es la correcta.
+
+### Verificar antes de usar (recomendado)
+
+```powershell
+node ufinet_orion_whatsapp.js --verificar
+```
+
+No envía nada por WhatsApp y puede correr con el servicio activo. Imprime cuántos enlaces se ubicaron, cuáles no y por qué, y cuáles tienen estrategias en desacuerdo, y escribe `logs\verificacion_enlaces.csv` (ábralo en Excel) con la interfaz elegida para cada fila. Termina con código `2` si hay enlaces sin ubicar. Revise ese reporte **antes** de apuntar el bot a un grupo real.
+
+Cuando el bot corre, además envía **un** mensaje de WhatsApp si hay enlaces que no se pudieron ubicar (y otro cuando ya estén todos), para que un enlace sin cubrir no pase desapercibido.
+
+### Estados y recuperación
+
+* Se alerta cuando el estado de la interfaz está en `alertStatuses`, **o** cuando el equipo (switch) al que pertenece está Down o Unreachable, porque en ese caso Orion suele dejar sus interfaces en un estado desconocido y no se podrían verificar.
+* Un enlace se da por **recuperado solo si Orion lo reporta Up (1)**. Estados como Unmanaged o Shutdown no cuentan como recuperación: la alerta sigue activa hasta que el enlace esté realmente Up.
+* `Shutdown` no está en `alertStatuses` por defecto (suele ser una baja administrativa planificada). Agréguelo si en su operación debe alertar.
+
+### Puesta en marcha
+
+1. Copie el CSV a `C:\UfinetOrionBot\` (el instalador copia automáticamente cualquier `enlaces_*.csv` que esté junto a él).
+2. En el primer arranque, indique el archivo cuando el asistente pregunte "Archivo CSV de enlaces". Si ya existe `ufinet_config.json`, agregue `"watchlistFile": "enlaces_bac.csv"` y `"clientName": "BAC"`.
+3. Ejecute `--verificar` y corrija lo que reporte.
+4. Reinicie el servicio. Al principio conviene apuntar `target` a su número personal ("modo sombra") y pasarlo al grupo del equipo cuando los avisos sean los esperados.
+
+> **Orion 2015.x:** la API SWIS por HTTPS suele estar en el puerto **17778** (versiones nuevas usan 17774). Si `--verificar` no conecta, pruebe con `"port": "17778"`.
+
+---
 
 Tras editar el archivo, reinicie el servicio: `Restart-Service UfinetOrionWhatsAppBot` (o `Stop-ScheduledTask` / `Start-ScheduledTask` si usa la tarea programada).
 
@@ -142,6 +207,9 @@ Tras editar el archivo, reinicie el servicio: `Restart-Service UfinetOrionWhatsA
 | `ECONNREFUSED` / `ETIMEDOUT` | Puerto 17774 bloqueado o URL incorrecta. Pruebe la conexión desde el servidor. |
 | El servicio arranca pero no envía nada | Falta vincular el QR. Ejecute el bot en consola una vez. |
 | `WhatsApp pide escanear un QR pero no hay consola interactiva` | La sesión caducó o se cerró desde el teléfono. Re-vincule (ver "Volver a vincular WhatsApp"). |
+| `--verificar` o el bot no conectan a Orion (`ECONNREFUSED`, `ETIMEDOUT`) | Puerto de la API incorrecto: pruebe `17778` en Orion 2015.x. Revise también el firewall. |
+| Un enlace no se monitorea | Está en el reporte de `--verificar` (sin ubicar o ambiguo). Revise el nombre del switch, el puerto y la descripción de la interfaz en Orion. |
+| `No se pudo leer la lista de enlaces` y el bot se detiene | El CSV de `watchlistFile` no existe o no tiene las columnas `Switch` y `Puerto`. Es intencional: el bot no vuelve a "todo Orion" por su cuenta para no inundar el chat. |
 | Falla la consulta de aplicaciones | Orion sin SAM/APM. Ponga `"monitorApplications": false`. |
 | No llegan comandos `!estado` | Deben enviarse desde el chat configurado como destino. |
 

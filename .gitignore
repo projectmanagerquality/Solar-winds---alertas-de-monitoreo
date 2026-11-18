@@ -14,3 +14,7 @@ ufinet_state.json.bak
 logs/
 node_modules/
 tools/
+
+# Listas de enlaces de clientes (datos del cliente); solo se versiona el ejemplo
+enlaces_*.csv
+!enlaces_ejemplo.csv

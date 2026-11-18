@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 $TargetDir      = 'C:\UfinetOrionBot'
 $ServiceName    = 'UfinetOrionWhatsAppBot'
 $ScriptName     = 'ufinet_orion_whatsapp.js'
-$ProjectFiles   = @('ufinet_orion_whatsapp.js', 'setup_and_run.ps1', 'README.md', 'package.json', 'package-lock.json', '.gitignore')
+$ProjectFiles   = @('ufinet_orion_whatsapp.js', 'setup_and_run.ps1', 'README.md', 'package.json', 'package-lock.json', '.gitignore', 'enlaces_ejemplo.csv')
 $NeededPackages = @('whatsapp-web.js', 'qrcode-terminal', 'axios')
 
 function Write-Info($msg) { Write-Host $msg -ForegroundColor Cyan }
@@ -60,6 +60,11 @@ function Copy-ProjectFiles {
     foreach ($f in $ProjectFiles) {
         $p = Join-Path $src $f
         if (Test-Path $p) { Copy-Item -Path $p -Destination $dst -Force }
+    }
+    # Listas de enlaces de clientes (enlaces_*.csv) que esten junto al instalador
+    foreach ($csv in @(Get-ChildItem -Path $src -Filter 'enlaces_*.csv' -File -ErrorAction SilentlyContinue)) {
+        Copy-Item -Path $csv.FullName -Destination $dst -Force
+        Write-Ok "Lista de enlaces copiada: $($csv.Name)"
     }
     Write-Ok 'Archivos copiados (la configuracion, el estado y la sesion de WhatsApp existentes se conservan).'
 }

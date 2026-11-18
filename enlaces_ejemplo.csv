@@ -1,0 +1,4 @@
+﻿Código administrativo,Nombre del servicio,Switch,Puerto
+NINIALL10000001I,Internet DIA 5Mbps-Sucursal Ejemplo Uno,NIXXXXXXXXXSWAUFN01,port10
+NINIALL10000002I,Internet DIA 60Mbps-Sucursal Ejemplo Dos,NIXXXXXXXXXSWAUFN01,port11
+NINI00000003,Capacidad Ethernet 60Mbps-Sucursal Ejemplo Dos,NIXXXXXXXXXSWAUFN01,port11
